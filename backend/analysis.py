@@ -52,7 +52,9 @@ Rules:
 - start_time and end_time must be numbers (seconds)
 - confidence is a float between 0.0 and 1.0
 - Ensure end_time - start_time is between {config.MIN_CLIP_SECONDS} and {config.MAX_CLIP_SECONDS}
-- Return exactly {config.MAX_CLIPS} clips, ordered by confidence descending"""
+- Return exactly {config.MAX_CLIPS} clips, ordered by confidence descending
+- Clips must be non-overlapping
+- Avoid clips that are too close in time unless the transcript has no other strong moments"""
 
 
 def _fmt_time(seconds: float) -> str:

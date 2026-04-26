@@ -13,9 +13,9 @@ import shutil
 import logging
 import subprocess
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
-from models import ClipSuggestion, GeneratedClip
+from models import ClipSuggestion, GeneratedClip, ViralOptions
 import config
 
 logger = logging.getLogger(__name__)
@@ -222,31 +222,37 @@ def process_clips(
     video_path: str,
     suggestions: List[ClipSuggestion],
     job_id: str,
+    segments=None,
+    viral_options=None,
 ) -> List[GeneratedClip]:
     """
     Gera os arquivos de vídeo para cada sugestão de clipe.
+    Se viral_options.enabled=True, gera também a versão viral de cada clipe.
     Retorna lista de GeneratedClip com URLs de download.
     """
     output_job_dir = OUTPUT_DIR / job_id
     output_job_dir.mkdir(exist_ok=True)
 
-    video_info = get_video_info(video_path)
+    video_info     = get_video_info(video_path)
     video_duration = video_info["duration"]
+
+    do_viral = viral_options is not None and getattr(viral_options, "enabled", False)
+    if do_viral:
+        from viral_edit import generate_viral_clip
 
     generated = []
 
     for i, suggestion in enumerate(suggestions, start=1):
         clip_id = str(uuid.uuid4())[:8]
-        # Garante que o clipe não ultrapasse a duração do vídeo
-        start = max(0.0, suggestion.start_time)
-        end = min(video_duration, suggestion.end_time)
+        start   = max(0.0, suggestion.start_time)
+        end     = min(video_duration, suggestion.end_time)
 
         if end <= start:
             logger.warning(f"Clipe {i} tem duração inválida ({start:.1f}s - {end:.1f}s), pulando.")
             continue
 
-        safe_title = re.sub(r'[^\w\s-]', '', suggestion.title)[:30].strip().replace(" ", "_")
-        filename = f"clip_{i:02d}_{safe_title}_{clip_id}.{config.OUTPUT_FORMAT}"
+        safe_title  = re.sub(r'[^\w\s-]', '', suggestion.title)[:30].strip().replace(" ", "_")
+        filename    = f"clip_{i:02d}_{safe_title}_{clip_id}.{config.OUTPUT_FORMAT}"
         output_path = str(output_job_dir / filename)
 
         logger.info(f"[FFmpeg] Gerando clipe {i}/{len(suggestions)}: {filename}")
@@ -255,6 +261,29 @@ def process_clips(
         except Exception as e:
             logger.error(f"Erro ao gerar clipe {i}: {e}")
             continue
+
+        # ── Viral edit ────────────────────────────────────────────────────────
+        viral_filename     = None
+        viral_download_url = None
+
+        if do_viral:
+            try:
+                v_name   = f"viral_{i:02d}_{safe_title}_{clip_id}.{config.OUTPUT_FORMAT}"
+                v_output = str(output_job_dir / v_name)
+                generate_viral_clip(
+                    input_clip_path=output_path,
+                    segments=segments or [],
+                    clip_start=start,
+                    clip_end=end,
+                    options=viral_options,
+                    output_path=v_output,
+                )
+                viral_filename     = v_name
+                viral_download_url = f"/api/download/{job_id}/{v_name}"
+                logger.info(f"[viral] Clipe viral {i} gerado: {v_name}")
+            except Exception as e:
+                logger.error(f"[viral] Erro no clipe viral {i}: {e}")
+        # ─────────────────────────────────────────────────────────────────────
 
         generated.append(GeneratedClip(
             id=clip_id,
@@ -266,6 +295,8 @@ def process_clips(
             confidence=suggestion.confidence,
             filename=filename,
             download_url=f"/api/download/{job_id}/{filename}",
+            viral_filename=viral_filename,
+            viral_download_url=viral_download_url,
         ))
 
     return generated

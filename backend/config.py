@@ -25,3 +25,11 @@ MIN_CLIP_SECONDS: int = int(os.getenv("MIN_CLIP_SECONDS", "15"))
 MAX_CLIP_SECONDS: int = int(os.getenv("MAX_CLIP_SECONDS", "60"))
 OUTPUT_FORMAT: str = os.getenv("OUTPUT_FORMAT", "mp4")
 OUTPUT_ASPECT_RATIO: str = os.getenv("OUTPUT_ASPECT_RATIO", "9:16")
+
+# ─── Viral Edit ────────────────────────────────────────────────────────────────
+ENABLE_VIRAL_EDIT: bool    = os.getenv("ENABLE_VIRAL_EDIT", "false").lower() == "true"
+FACE_DETECTION: bool       = os.getenv("FACE_DETECTION", "true").lower() == "true"
+ADD_CAPTIONS: bool         = os.getenv("ADD_CAPTIONS", "true").lower() == "true"
+CAPTION_STYLE: str         = os.getenv("CAPTION_STYLE", "tiktok")   # tiktok | bold
+BACKGROUND_VIDEO_PATH: str = os.getenv("BACKGROUND_VIDEO_PATH", "")
+FONT_PATH: str             = os.getenv("FONT_PATH", "")

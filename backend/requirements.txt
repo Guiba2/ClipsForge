@@ -11,3 +11,11 @@ faster-whisper==1.0.3
 # Transcrição API (opcional)
 assemblyai==0.29.0
 
+# LLM
+google-generativeai==0.7.2
+
+# Download de vídeos
+yt-dlp==2024.5.27
+
+# Viral Edit — detecção de rosto (opcional; sem ele usa crop central)
+# opencv-python-headless==4.9.0.80

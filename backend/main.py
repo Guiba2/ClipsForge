@@ -14,7 +14,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from models import AnalyzeRequest, UrlRequest
+from models import AnalyzeRequest, UrlRequest, ViralOptions
 from video_processor import (
     download_video, save_upload, extract_audio,
     process_clips, OUTPUT_DIR, UPLOAD_DIR,
@@ -79,10 +79,12 @@ async def _run_pipeline(
     job_id: str,
     transcription_provider: Optional[str],
     llm_provider: Optional[str],
+    viral_options: Optional[ViralOptions] = None,
 ):
-    """Pipeline completo: transcrição → análise → geração de clipes."""
+    """Pipeline completo: transcrição → análise → geração de clipes → (viral edit)."""
     from transcription import transcribe
     from analysis import analyze
+    import functools
 
     loop = asyncio.get_running_loop()
 
@@ -115,21 +117,36 @@ async def _run_pipeline(
 
         logger.info(f"[Pipeline] {len(suggestions)} sugestões de clipes.")
 
-        # 4. Gera clipes com FFmpeg (CPU-bound → executor)
-        _update_job(job_id, "processing", 70, f"Gerando {len(suggestions)} clipes verticais...")
+        # 4. Gera clipes com FFmpeg
+        do_viral = viral_options is not None and viral_options.enabled
+        step_msg = (
+            f"Gerando {len(suggestions)} clipes + modo viral..."
+            if do_viral else
+            f"Gerando {len(suggestions)} clipes verticais..."
+        )
+        _update_job(job_id, "processing", 70, step_msg)
+
         clips = await loop.run_in_executor(
-            _executor, process_clips, video_path, suggestions, job_id,
+            _executor,
+            functools.partial(
+                process_clips,
+                video_path, suggestions, job_id,
+                segments=segments,
+                viral_options=viral_options,
+            ),
         )
 
         if not clips:
             raise ValueError("Nenhum clipe foi gerado pelo FFmpeg. Verifique os logs.")
 
         # 5. Concluído
-        _update_job(
-            job_id, "done", 100,
-            f"{len(clips)} clipe(s) gerado(s) com sucesso!",
-            clips=[c.model_dump() for c in clips],
-        )
+        viral_count = sum(1 for c in clips if c.viral_filename)
+        msg = f"{len(clips)} clipe(s) gerado(s)"
+        if viral_count:
+            msg += f" + {viral_count} versão(ões) viral"
+        msg += "!"
+
+        _update_job(job_id, "done", 100, msg, clips=[c.model_dump() for c in clips])
 
     except Exception as exc:
         logger.exception(f"[Pipeline] Erro no job {job_id[:8]}: {exc}")
@@ -189,9 +206,10 @@ async def upload_url(data: UrlRequest, background_tasks: BackgroundTasks):
     job_id = _new_job()
     _update_job(job_id, "downloading", 2, "Baixando vídeo...")
 
-    # Captura provedores para encadear o pipeline após o download
+    # Captura provedores e viral options para encadear o pipeline após o download
     t_provider = data.transcription_provider
     l_provider = data.llm_provider
+    v_viral    = data.viral
 
     async def _download_then_analyze():
         """Baixa e encadeia pipeline — elimina race condition do frontend."""
@@ -202,7 +220,7 @@ async def upload_url(data: UrlRequest, background_tasks: BackgroundTasks):
             )
             _jobs[job_id]["video_path"] = video_path
             _update_job(job_id, "transcribing", 8, "Download concluído. Iniciando transcrição...")
-            await _run_pipeline(job_id, t_provider, l_provider)
+            await _run_pipeline(job_id, t_provider, l_provider, viral_options=v_viral)
         except Exception as e:
             _update_job(job_id, "error", 0, f"Erro: {str(e)[:200]}", error=str(e))
 
@@ -239,6 +257,7 @@ async def analyze_video(
         _run_pipeline, job_id,
         options.transcription_provider,
         options.llm_provider,
+        options.viral,
     )
 
     return {"job_id": job_id, "message": "Análise iniciada."}
@@ -292,6 +311,30 @@ async def list_jobs():
     ]
 
 
+
+@app.post("/api/gameplay/{job_id}", summary="Upload de vídeo de gameplay/fundo para modo viral")
+async def upload_gameplay(job_id: str, file: UploadFile = File(...)):
+    """
+    Faz upload de um vídeo para usar como fundo no painel inferior do modo viral.
+    Retorna o caminho do servidor que deve ser passado em viral.background_video_path.
+    """
+    job = _get_job(job_id)
+    allowed = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in allowed:
+        raise HTTPException(400, f"Formato não suportado: {ext}")
+
+    content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(400, "Arquivo vazio.")
+
+    loop = asyncio.get_running_loop()
+    video_path = await loop.run_in_executor(
+        _executor, save_upload, content, f"gameplay{ext}", f"{job_id}_bg"
+    )
+    return {"job_id": job_id, "gameplay_path": video_path}
+
+
 @app.get("/api/config", summary="Configuração ativa")
 async def get_config():
     return {
@@ -303,4 +346,9 @@ async def get_config():
         "max_clip_seconds": config.MAX_CLIP_SECONDS,
         "output_format": config.OUTPUT_FORMAT,
         "output_aspect_ratio": config.OUTPUT_ASPECT_RATIO,
+        # Viral edit defaults do .env
+        "viral_edit_enabled": config.ENABLE_VIRAL_EDIT,
+        "viral_face_detection": config.FACE_DETECTION,
+        "viral_add_captions": config.ADD_CAPTIONS,
+        "viral_caption_style": config.CAPTION_STYLE,
     }

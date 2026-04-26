@@ -694,3 +694,187 @@ body {
   .clip-card { grid-template-columns: 1fr; }
   .clip-card-right { flex-direction: row; align-items: center; justify-content: space-between; }
 }
+
+/* ─── Viral Card ────────────────────────────────────────────────────────────── */
+.viral-card {
+  border-color: var(--border);
+  transition: border-color 0.3s ease;
+}
+.viral-card--active {
+  border-color: #ff3b6b;
+  box-shadow: 0 0 0 1px rgba(255, 59, 107, 0.15), 0 4px 24px rgba(255, 59, 107, 0.08);
+}
+
+.viral-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.viral-badge {
+  font-size: 0.65rem;
+  background: rgba(255, 59, 107, 0.15);
+  color: #ff3b6b;
+  border: 1px solid rgba(255, 59, 107, 0.3);
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-left: 6px;
+}
+.viral-desc {
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-weight: 300;
+  margin-top: 2px;
+}
+
+/* Toggle switch */
+.toggle-switch {
+  width: 48px;
+  height: 26px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.25s, border-color 0.25s;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.toggle-switch--on {
+  background: #ff3b6b;
+  border-color: #ff3b6b;
+}
+.toggle-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+.toggle-switch--on .toggle-knob {
+  transform: translateX(22px);
+}
+
+/* Viral options panel */
+.viral-options {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 59, 107, 0.15);
+  animation: fadeUp 0.25s ease both;
+}
+.viral-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.viral-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+}
+.viral-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.viral-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #ff3b6b;
+  cursor: pointer;
+}
+
+/* Gameplay upload */
+.gameplay-section {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+}
+.gameplay-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.optional-tag {
+  font-size: 0.68rem;
+  color: var(--muted2);
+  background: var(--border);
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-weight: 400;
+}
+.gameplay-hint {
+  font-size: 0.78rem;
+  color: var(--muted2);
+  margin-bottom: 10px;
+  font-weight: 300;
+}
+.drop-zone--sm {
+  padding: 20px 16px;
+  flex-direction: row;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* ─── Clip Card — Viral variant ─────────────────────────────────────────────── */
+.clip-card--viral {
+  border-color: rgba(255, 59, 107, 0.25);
+}
+.clip-card--viral:hover {
+  border-color: rgba(255, 59, 107, 0.5);
+}
+
+.viral-pill {
+  font-size: 0.68rem;
+  background: rgba(255, 59, 107, 0.12);
+  color: #ff3b6b;
+  border: 1px solid rgba(255, 59, 107, 0.3);
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.clip-downloads {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+  min-width: 100px;
+}
+
+.btn-download-viral {
+  background: rgba(255, 59, 107, 0.1);
+  color: #ff3b6b;
+  border: 1px solid rgba(255, 59, 107, 0.4);
+  font-size: 0.82rem;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 700;
+  transition: background 0.2s;
+}
+.btn-download-viral:hover {
+  background: rgba(255, 59, 107, 0.18);
+}
+
+/* ─── Responsive adjustments ────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .viral-options-grid { grid-template-columns: 1fr; }
+  .clip-downloads { flex-direction: row; }
+}
