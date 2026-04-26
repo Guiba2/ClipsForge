@@ -33,3 +33,8 @@ ADD_CAPTIONS: bool         = os.getenv("ADD_CAPTIONS", "true").lower() == "true"
 CAPTION_STYLE: str         = os.getenv("CAPTION_STYLE", "tiktok")   # tiktok | bold
 BACKGROUND_VIDEO_PATH: str = os.getenv("BACKGROUND_VIDEO_PATH", "")
 FONT_PATH: str             = os.getenv("FONT_PATH", "")
+
+# ─── Center Blur Layout ────────────────────────────────────────────────────────
+ENABLE_CENTER_BLUR_LAYOUT: bool  = os.getenv("ENABLE_CENTER_BLUR_LAYOUT", "false").lower() == "true"
+CENTER_VIDEO_HEIGHT_RATIO: float = float(os.getenv("CENTER_VIDEO_HEIGHT_RATIO", "0.70"))
+BACKGROUND_BLUR_STRENGTH: int    = int(os.getenv("BACKGROUND_BLUR_STRENGTH", "20"))

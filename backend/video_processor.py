@@ -15,7 +15,7 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional
 
-from models import ClipSuggestion, GeneratedClip, ViralOptions
+from models import ClipSuggestion, GeneratedClip, ViralOptions, CenterBlurOptions
 import config
 
 logger = logging.getLogger(__name__)
@@ -224,6 +224,7 @@ def process_clips(
     job_id: str,
     segments=None,
     viral_options=None,
+    center_blur_options=None,
 ) -> List[GeneratedClip]:
     """
     Gera os arquivos de vídeo para cada sugestão de clipe.
@@ -285,6 +286,31 @@ def process_clips(
                 logger.error(f"[viral] Erro no clipe viral {i}: {e}")
         # ─────────────────────────────────────────────────────────────────────
 
+
+        # ── Center Blur ───────────────────────────────────────────────────────
+        blur_filename     = None
+        blur_download_url = None
+
+        do_blur = center_blur_options is not None and getattr(center_blur_options, "enabled", False)
+        if do_blur:
+            try:
+                from center_blur import generate_center_blur_video
+                b_name   = f"blur_{i:02d}_{safe_title}_{clip_id}.{config.OUTPUT_FORMAT}"
+                b_output = str(output_job_dir / b_name)
+                generate_center_blur_video(
+                    input_video=output_path,
+                    output_video=b_output,
+                    options=center_blur_options,
+                    segments=segments or [],
+                    clip_start=start,
+                    clip_end=end,
+                )
+                blur_filename     = b_name
+                blur_download_url = f"/api/download/{job_id}/{b_name}"
+                logger.info(f"[blur] Clipe blur {i} gerado: {b_name}")
+            except Exception as e:
+                logger.error(f"[blur] Erro no clipe blur {i}: {e}")
+        # ─────────────────────────────────────────────────────────────────────
         generated.append(GeneratedClip(
             id=clip_id,
             title=suggestion.title,
@@ -297,6 +323,8 @@ def process_clips(
             download_url=f"/api/download/{job_id}/{filename}",
             viral_filename=viral_filename,
             viral_download_url=viral_download_url,
+            blur_filename=blur_filename,
+            blur_download_url=blur_download_url,
         ))
 
     return generated

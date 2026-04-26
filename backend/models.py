@@ -22,11 +22,21 @@ class CaptionStyle(str, Enum):
 # ─── Opções do modo viral ──────────────────────────────────────────────────────
 
 class ViralOptions(BaseModel):
-    enabled: bool                          = False
-    face_detection: bool                   = True
-    add_captions: bool                     = True
-    caption_style: CaptionStyle            = CaptionStyle.tiktok
-    background_video_path: Optional[str]   = None  # path do gameplay no servidor
+    enabled: bool                        = False
+    face_detection: bool                 = True
+    add_captions: bool                   = True
+    caption_style: CaptionStyle          = CaptionStyle.tiktok
+    background_video_path: Optional[str] = None
+
+
+# ─── Opções do center blur layout ─────────────────────────────────────────────
+
+class CenterBlurOptions(BaseModel):
+    enabled: bool               = False
+    video_height_ratio: float   = 0.70   # 0.0–1.0, porção da altura ocupada pelo vídeo central
+    blur_strength: int          = 20     # sigma do gblur no fundo
+    add_captions: bool          = True
+    caption_style: CaptionStyle = CaptionStyle.tiktok
 
 
 # ─── Requests ─────────────────────────────────────────────────────────────────
@@ -36,12 +46,14 @@ class UrlRequest(BaseModel):
     transcription_provider: Optional[TranscriptionProvider] = None
     llm_provider: Optional[LLMProvider]                     = None
     viral: Optional[ViralOptions]                           = None
+    center_blur: Optional[CenterBlurOptions]                = None
 
 
 class AnalyzeRequest(BaseModel):
     transcription_provider: Optional[TranscriptionProvider] = None
     llm_provider: Optional[LLMProvider]                     = None
     viral: Optional[ViralOptions]                           = None
+    center_blur: Optional[CenterBlurOptions]                = None
 
 
 # ─── Transcrição ──────────────────────────────────────────────────────────────
@@ -59,7 +71,7 @@ class ClipSuggestion(BaseModel):
     end_time:   float
     title:      str
     reason:     str
-    confidence: float  # 0.0 a 1.0
+    confidence: float
 
 
 class GeneratedClip(BaseModel):
@@ -72,28 +84,32 @@ class GeneratedClip(BaseModel):
     confidence:   float
     filename:     str
     download_url: str
-    viral_filename:     Optional[str] = None   # versão viral, se gerada
+    # versão viral (dual-panel + legenda)
+    viral_filename:     Optional[str] = None
     viral_download_url: Optional[str] = None
+    # versão center blur (fundo desfocado + legenda)
+    blur_filename:     Optional[str] = None
+    blur_download_url: Optional[str] = None
 
 
 # ─── Status do Job ────────────────────────────────────────────────────────────
 
 class JobStatus(str, Enum):
-    idle        = "idle"
-    downloading = "downloading"
+    idle         = "idle"
+    downloading  = "downloading"
     transcribing = "transcribing"
-    analyzing   = "analyzing"
-    processing  = "processing"
-    viral       = "viral"          # novo passo: aplicando viral edit
-    done        = "done"
-    error       = "error"
+    analyzing    = "analyzing"
+    processing   = "processing"
+    viral        = "viral"
+    done         = "done"
+    error        = "error"
 
 
 class JobState(BaseModel):
     job_id:     str
-    status:     JobStatus          = JobStatus.idle
-    progress:   int                = 0
-    message:    str                = "Aguardando..."
-    video_path: Optional[str]      = None
+    status:     JobStatus               = JobStatus.idle
+    progress:   int                     = 0
+    message:    str                     = "Aguardando..."
+    video_path: Optional[str]           = None
     clips:      Optional[List[GeneratedClip]] = None
-    error:      Optional[str]      = None
+    error:      Optional[str]           = None

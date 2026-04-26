@@ -14,7 +14,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from models import AnalyzeRequest, UrlRequest, ViralOptions
+from models import AnalyzeRequest, UrlRequest, ViralOptions, CenterBlurOptions
 from video_processor import (
     download_video, save_upload, extract_audio,
     process_clips, OUTPUT_DIR, UPLOAD_DIR,
@@ -80,8 +80,9 @@ async def _run_pipeline(
     transcription_provider: Optional[str],
     llm_provider: Optional[str],
     viral_options: Optional[ViralOptions] = None,
+    center_blur_options: Optional[CenterBlurOptions] = None,
 ):
-    """Pipeline completo: transcrição → análise → geração de clipes → (viral edit)."""
+    """Pipeline completo: transcrição → análise → geração de clipes → (viral/blur)."""
     from transcription import transcribe
     from analysis import analyze
     import functools
@@ -119,11 +120,12 @@ async def _run_pipeline(
 
         # 4. Gera clipes com FFmpeg
         do_viral = viral_options is not None and viral_options.enabled
-        step_msg = (
-            f"Gerando {len(suggestions)} clipes + modo viral..."
-            if do_viral else
-            f"Gerando {len(suggestions)} clipes verticais..."
-        )
+        do_blur  = center_blur_options is not None and center_blur_options.enabled
+        extras   = []
+        if do_viral: extras.append("viral")
+        if do_blur:  extras.append("blur")
+        suffix   = " + " + " & ".join(extras) if extras else ""
+        step_msg = f"Gerando {len(suggestions)} clipes{suffix}..."
         _update_job(job_id, "processing", 70, step_msg)
 
         clips = await loop.run_in_executor(
@@ -133,6 +135,7 @@ async def _run_pipeline(
                 video_path, suggestions, job_id,
                 segments=segments,
                 viral_options=viral_options,
+                center_blur_options=center_blur_options,
             ),
         )
 
@@ -141,9 +144,10 @@ async def _run_pipeline(
 
         # 5. Concluído
         viral_count = sum(1 for c in clips if c.viral_filename)
+        blur_count  = sum(1 for c in clips if c.blur_filename)
         msg = f"{len(clips)} clipe(s) gerado(s)"
-        if viral_count:
-            msg += f" + {viral_count} versão(ões) viral"
+        if viral_count: msg += f" + {viral_count} viral"
+        if blur_count:  msg += f" + {blur_count} blur"
         msg += "!"
 
         _update_job(job_id, "done", 100, msg, clips=[c.model_dump() for c in clips])
@@ -206,10 +210,11 @@ async def upload_url(data: UrlRequest, background_tasks: BackgroundTasks):
     job_id = _new_job()
     _update_job(job_id, "downloading", 2, "Baixando vídeo...")
 
-    # Captura provedores e viral options para encadear o pipeline após o download
+    # Captura provedores e opções para encadear o pipeline após o download
     t_provider = data.transcription_provider
     l_provider = data.llm_provider
     v_viral    = data.viral
+    v_blur     = data.center_blur
 
     async def _download_then_analyze():
         """Baixa e encadeia pipeline — elimina race condition do frontend."""
@@ -220,7 +225,7 @@ async def upload_url(data: UrlRequest, background_tasks: BackgroundTasks):
             )
             _jobs[job_id]["video_path"] = video_path
             _update_job(job_id, "transcribing", 8, "Download concluído. Iniciando transcrição...")
-            await _run_pipeline(job_id, t_provider, l_provider, viral_options=v_viral)
+            await _run_pipeline(job_id, t_provider, l_provider, viral_options=v_viral, center_blur_options=v_blur)
         except Exception as e:
             _update_job(job_id, "error", 0, f"Erro: {str(e)[:200]}", error=str(e))
 
@@ -258,6 +263,7 @@ async def analyze_video(
         options.transcription_provider,
         options.llm_provider,
         options.viral,
+        options.center_blur,
     )
 
     return {"job_id": job_id, "message": "Análise iniciada."}
@@ -351,4 +357,8 @@ async def get_config():
         "viral_face_detection": config.FACE_DETECTION,
         "viral_add_captions": config.ADD_CAPTIONS,
         "viral_caption_style": config.CAPTION_STYLE,
+        # Center Blur defaults do .env
+        "center_blur_enabled": config.ENABLE_CENTER_BLUR_LAYOUT,
+        "center_blur_ratio": config.CENTER_VIDEO_HEIGHT_RATIO,
+        "center_blur_strength": config.BACKGROUND_BLUR_STRENGTH,
     }

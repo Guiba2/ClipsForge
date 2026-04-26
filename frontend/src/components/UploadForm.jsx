@@ -47,6 +47,19 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
   const [gameplayPath, setGameplayPath]     = useState(null); // path no servidor após upload
   const [gameplayLoading, setGameplayLoading] = useState(false);
 
+  // Center Blur state
+  const [blurEnabled, setBlurEnabled]       = useState(
+    serverConfig?.center_blur_enabled ?? false
+  );
+  const [blurRatio, setBlurRatio]           = useState(
+    serverConfig?.center_blur_ratio ?? 0.70
+  );
+  const [blurStrength, setBlurStrength]     = useState(
+    serverConfig?.center_blur_strength ?? 20
+  );
+  const [blurCaptions, setBlurCaptions]     = useState(true);
+  const [blurCaptionStyle, setBlurCaptionStyle] = useState("tiktok");
+
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
   const fileRef     = useRef(null);
@@ -131,6 +144,15 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
         background_video_path: bgPath,
       } : null;
 
+      // ── Passo 3b: montar center_blur options ─────────────────────────────────
+      const center_blur = blurEnabled ? {
+        enabled: true,
+        video_height_ratio: blurRatio,
+        blur_strength: blurStrength,
+        add_captions: blurCaptions,
+        caption_style: blurCaptionStyle,
+      } : null;
+
       // ── Passo 4: iniciar análise ───────────────────────────────────────────
       if (tab === "file") {
         const r2 = await fetch(`/api/analyze/${jobId}`, {
@@ -140,6 +162,7 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
             transcription_provider: transcriptionProvider,
             llm_provider: llmProvider,
             viral,
+            center_blur,
           }),
         });
         if (!r2.ok) throw new Error((await r2.json().catch(() => ({}))).detail || "Erro ao iniciar análise.");
@@ -154,6 +177,7 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
             transcription_provider: transcriptionProvider,
             llm_provider: llmProvider,
             viral,
+            center_blur,
           }),
         });
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "Erro ao processar URL.");
@@ -169,6 +193,7 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
   };
 
   const canSubmit = !loading && (tab === "file" ? !!file : !!url.trim());
+  const anyEffect  = viralEnabled || blurEnabled;
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -326,6 +351,84 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
         )}
       </div>
 
+
+      {/* ── Center Blur Layout ── */}
+      <div className={`card blur-card${blurEnabled ? " blur-card--active" : ""}`} style={{ animationDelay: "0.25s" }}>
+        <div className="viral-header">
+          <div style={{ flex: 1 }}>
+            <div className="card-title" style={{ marginBottom: 4 }}>
+              <span className="step-num" style={{ background: blurEnabled ? "#38bdf8" : undefined }}>4</span>
+              Fundo Desfocado
+              <span className="blur-badge">Center Blur</span>
+            </div>
+            <p className="viral-desc">
+              Vídeo central nítido com o mesmo vídeo desfocado preenchendo o fundo. Visual limpo e 9:16.
+            </p>
+          </div>
+          <button
+            className={`toggle-switch${blurEnabled ? " toggle-switch--blur-on" : ""}`}
+            onClick={() => setBlurEnabled(v => !v)}
+            aria-label="Ativar fundo desfocado"
+          >
+            <span className="toggle-knob" />
+          </button>
+        </div>
+
+        {blurEnabled && (
+          <div className="viral-options">
+            <div className="viral-options-grid">
+              {/* Altura do vídeo central */}
+              <div className="provider-group">
+                <label>Altura do vídeo central — {Math.round(blurRatio * 100)}%</label>
+                <input
+                  type="range" min="0.40" max="0.90" step="0.05"
+                  value={blurRatio}
+                  onChange={(e) => setBlurRatio(parseFloat(e.target.value))}
+                  className="blur-slider"
+                />
+              </div>
+
+              {/* Força do blur */}
+              <div className="provider-group">
+                <label>Intensidade do desfoque — {blurStrength}</label>
+                <input
+                  type="range" min="5" max="60" step="5"
+                  value={blurStrength}
+                  onChange={(e) => setBlurStrength(parseInt(e.target.value))}
+                  className="blur-slider"
+                />
+              </div>
+
+              {/* Caption style */}
+              <div className="provider-group">
+                <label>Estilo de Legenda</label>
+                <select className="provider-select" value={blurCaptionStyle}
+                  onChange={(e) => setBlurCaptionStyle(e.target.value)}>
+                  <option value="tiktok">🎵 TikTok (branco + borda)</option>
+                  <option value="bold">💥 Bold (amarelo uppercase)</option>
+                </select>
+              </div>
+
+              {/* Toggle legendas */}
+              <div className="viral-checks" style={{ justifyContent: "flex-start", paddingTop: 20 }}>
+                <label className="viral-check">
+                  <input type="checkbox" checked={blurCaptions}
+                    onChange={(e) => setBlurCaptions(e.target.checked)} />
+                  <span>Legendas automáticas</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Preview visual do ratio */}
+            <div className="blur-preview">
+              <div className="blur-preview-bg" />
+              <div className="blur-preview-fg" style={{ height: `${blurRatio * 100}%` }} />
+              <span className="blur-preview-label">{Math.round(blurRatio * 100)}%</span>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Erro */}
       {error && (
         <div className="error-box" style={{ marginBottom: 16 }}>
@@ -340,7 +443,7 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
           <><span style={{ display: "inline-block", animation: "spin 1s linear infinite" }}>⟳</span>
             {gameplayLoading ? "Enviando gameplay..." : "Enviando..."}</>
         ) : (
-          <>{viralEnabled ? "🔥 Gerar Clipes Virais" : "✂️ Analisar e Gerar Clipes"}</>
+          <>{viralEnabled && blurEnabled ? "🔥🌫 Gerar Clipes (Viral + Blur)" : viralEnabled ? "🔥 Gerar Clipes Virais" : blurEnabled ? "🌫 Gerar Clipes com Blur" : "✂️ Analisar e Gerar Clipes"}</>
         )}
       </button>
     </div>
