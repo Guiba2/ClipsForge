@@ -1,5 +1,7 @@
 # ✂️ ClipForge — Gerador Local de Clipes Virais
 
+![imagem_inicial](other/inicio.png)
+
 Alternativa self-hosted ao Opus Clip. Analisa vídeos com IA, detecta os melhores trechos e exporta clipes verticais 9:16 prontos para Shorts, Reels e TikTok.
 
 ---
@@ -109,7 +111,6 @@ npm install
 ### Terminal 1 — Backend
 ```bash
 cd backend
-source venv/bin/activate
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 

@@ -70,8 +70,8 @@ def _build_center_blur_filter(
         # ── Foreground nítido ──────────────────────────────────────────────────
         # scale para caber em 1080×fg_h mantendo proporção,
         # depois garante dimensões pares (obrigatório para libx264)
-        f"[0:v]scale={TW}:{fg_h}:force_original_aspect_ratio=decrease,"
-        f"scale=trunc(iw/2)*2:trunc(ih/2)*2,"
+        f"[0:v]scale={TW}:{fg_h}:force_original_aspect_ratio=increase,"
+        f"crop={TW}:{fg_h}:(ow-iw)/2:(oh-ih)/2,"
         f"setsar=1[fg];"
 
         # ── Composição ────────────────────────────────────────────────────────
