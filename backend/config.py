@@ -38,3 +38,6 @@ FONT_PATH: str             = os.getenv("FONT_PATH", "")
 ENABLE_CENTER_BLUR_LAYOUT: bool  = os.getenv("ENABLE_CENTER_BLUR_LAYOUT", "false").lower() == "true"
 CENTER_VIDEO_HEIGHT_RATIO: float = float(os.getenv("CENTER_VIDEO_HEIGHT_RATIO", "0.70"))
 BACKGROUND_BLUR_STRENGTH: int    = int(os.getenv("BACKGROUND_BLUR_STRENGTH", "20"))
+
+# ─── EXTRA ────────────────────────────────────
+ZOOM: float = float(os.getenv("ZOOM_VIDEO", "1"))

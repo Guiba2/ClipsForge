@@ -31,11 +31,9 @@ import config
 logger = logging.getLogger(__name__)
 
 CW, CH = 1080, 1920   # canvas 9:16
-VIGN   = 55           # pixels do fade cosseno top/bottom
+VIGN = 55              # fade cosseno top/bottom
 IS_WIN = platform.system() == "Windows"
 
-
-# ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _run(cmd: List[str], desc: str = "") -> None:
     logger.info(f"$ {' '.join(str(c) for c in cmd)}")
@@ -45,38 +43,24 @@ def _run(cmd: List[str], desc: str = "") -> None:
 
 
 def _escape_path(path: str) -> str:
-    """
-    Normaliza path para uso dentro de filtros FFmpeg.
-    No Windows: converte backslashes → forward slashes e escapa o ':' do drive.
-    Ex: C:\\foo\\bar.ass → C\\:/foo/bar.ass
-    """
-    p = Path(path).as_posix()       # C:/foo/bar.ass
+    p = Path(path).as_posix()
     if IS_WIN:
-        # FFmpeg filtergraph usa ':' como separador de opções;
-        # o ':' do drive letter precisa ser escapado com '\'
-        p = p.replace(":", "\\:")   # C\\:/foo/bar.ass
+        p = p.replace(":", "\\:")
     return p
 
 
-# ─── Filtro principal ─────────────────────────────────────────────────────────
-
-def _build_filter(fg_h: int, blur_sigma: int, vign: int) -> str:
+def _build_filter(fg_h: int, blur_sigma: int, vign: int, fg_zoom: float = 1.0) -> str:
     """
-    filter_complex FFmpeg para o layout center blur.
-
-    Streams de entrada: [0:v] — vídeo fonte usado DUAS vezes (bg e fg).
-
-    FIX vs versão anterior:
-      Antes: scale=-2:{fg_h}  →  escala pela altura, mas se a entrada já for
-             9:16 (ex.: 1080×1920), a largura resultante fica abaixo de 1080
-             e o crop subsequente falha com "Invalid size".
-
-      Agora: scale={CW}:{fg_h}:force_original_aspect_ratio=increase
-             →  garante que AMBAS as dimensões sejam >= alvo antes do crop,
-             funcionando tanto com landscape quanto com vídeos já em portrait.
+    Layout:
+    - fundo ocupa o canvas inteiro com blur
+    - foreground ocupa toda a largura do canvas
+    - foreground fica centralizado e com fade nas bordas de cima/baixo
     """
 
-    # ── Fundo: cover scale + gblur + leve escurecimento ──────────────────────
+    fg_scaled_h = max(2, int(fg_h * fg_zoom))
+    fg_scaled_h = (fg_scaled_h // 2) * 2  # garante altura par
+
+    # Fundo: cover + blur
     bg = (
         f"[0:v]"
         f"scale={CW}:{CH}:force_original_aspect_ratio=increase,"
@@ -86,29 +70,26 @@ def _build_filter(fg_h: int, blur_sigma: int, vign: int) -> str:
         f"[bg]"
     )
 
-    # ── Foreground: cover scale para {CW}×{fg_h}, crop central, alpha ────────
-    # force_original_aspect_ratio=increase → dimensão menor define o scale,
-    # garantindo largura >= CW E altura >= fg_h antes do crop.
+    # Foreground: preencher a largura do canvas
+    # Isso faz o vídeo "abrir" até as laterais esquerda/direita
     fg_prep = (
         f"[0:v]"
-        f"scale={CW}:{fg_h}:force_original_aspect_ratio=increase,"
-        f"crop={CW}:{fg_h},"           # crop lateral/vertical centralizado
+        f"scale={CW}:{fg_scaled_h}:force_original_aspect_ratio=increase,"
+        f"crop={CW}:{fg_scaled_h},"
         f"setsar=1,"
-        f"format=yuva420p"             # canal alpha necessário para geq
+        f"format=yuva420p"
         f"[fg_raw]"
     )
 
-    # ── Alpha fade cosseno nas bordas top/bottom do FG ────────────────────────
-    # Curva: (1 - cos(π·t)) / 2  — mesma usada na composição Python aprovada.
-    # Os \, dentro da string já são os literais que o FFmpeg espera no
-    # filter_complex; ao passar via subprocess list não há interpretação shell.
+    # Fade vertical nas bordas superior e inferior
     fade_expr = (
         f"if(lt(Y\\,{vign})\\,"
         f"255*(1-cos(PI*Y/{vign}))/2\\,"
-        f"if(gt(Y\\,{fg_h}-{vign})\\,"
-        f"255*(1-cos(PI*({fg_h}-Y)/{vign}))/2\\,"
+        f"if(gt(Y\\,{fg_scaled_h}-{vign})\\,"
+        f"255*(1-cos(PI*({fg_scaled_h}-Y)/{vign}))/2\\,"
         f"255))"
     )
+
     fg_alpha = (
         f"[fg_raw]"
         f"geq="
@@ -119,7 +100,7 @@ def _build_filter(fg_h: int, blur_sigma: int, vign: int) -> str:
         f"[fg_a]"
     )
 
-    # ── Overlay: fg centralizado sobre bg ─────────────────────────────────────
+    # Centraliza no canvas
     comp = f"[bg][fg_a]overlay=(W-w)/2:(H-h)/2,setsar=1[out]"
 
     return ";".join([bg, fg_prep, fg_alpha, comp])
@@ -131,10 +112,6 @@ def _burn_subtitles_local(
     font_path: str,
     video_out: str,
 ) -> None:
-    """
-    Queima legendas ASS no vídeo com tratamento de path para Windows.
-    Mantido localmente para não depender da versão de viral_edit.py do usuário.
-    """
     ass_esc = _escape_path(ass_path)
 
     if font_path and Path(font_path).exists():
@@ -156,8 +133,6 @@ def _burn_subtitles_local(
     )
 
 
-# ─── Interface pública ────────────────────────────────────────────────────────
-
 def generate_center_blur_video(
     input_video: str,
     output_video: str,
@@ -166,33 +141,28 @@ def generate_center_blur_video(
     clip_start: float,
     clip_end: float,
 ) -> str:
-    """
-    Gera a versão "center blur" de um clipe.
-
-    1. Composição FFmpeg: bg borrado + fg nítido com fade cosseno
-    2. Se add_captions=True, queima legendas ASS por cima
-
-    Retorna o caminho output_video gerado.
-    """
-    ratio      = max(0.3, min(0.95, options.video_height_ratio))
+    ratio = max(0.3, min(0.95, options.video_height_ratio))
     blur_sigma = max(5, min(100, options.blur_strength))
-    fg_h       = int(CH * ratio)
-    fg_h       = (fg_h // 2) * 2          # par obrigatório para libx264
-    style      = options.caption_style.value if options.caption_style else "tiktok"
-    font_p     = config.FONT_PATH or ""
+
+    fg_h = int(CH * ratio)
+    fg_h = (fg_h // 2) * 2  # par obrigatório para libx264
+
+    # Se sua classe tiver esse campo, ele funciona; se não tiver, fica 1.0
+    fg_zoom = float(getattr(options, "video_zoom", 1.0))
+
+    style = options.caption_style.value if options.caption_style else "tiktok"
+    font_p = config.FONT_PATH or ""
 
     logger.info(
-        f"[blur] center_blur: ratio={ratio:.0%}  fg_h={fg_h}px  "
-        f"blur=σ{blur_sigma}  captions={options.add_captions}  "
-        f"win={IS_WIN}"
+        f"[blur] center_blur: ratio={ratio:.0%} fg_h={fg_h}px "
+        f"zoom={fg_zoom:.2f} blur=σ{blur_sigma} captions={options.add_captions} win={IS_WIN}"
     )
 
-    filt = _build_filter(fg_h, blur_sigma, VIGN)
+    filt = _build_filter(fg_h, blur_sigma, VIGN, fg_zoom=fg_zoom)
 
     with tempfile.TemporaryDirectory(prefix="clipforge_blur_") as tmp:
-
-        # ── Passo 1: composição ────────────────────────────────────────────────
         composed = str(Path(tmp) / "composed.mp4")
+
         _run(
             [
                 "ffmpeg", "-i", input_video,
@@ -206,7 +176,6 @@ def generate_center_blur_video(
             "composição center blur",
         )
 
-        # ── Passo 2: legendas ──────────────────────────────────────────────────
         if options.add_captions and segments:
             from viral_edit import generate_ass_subtitles
 
@@ -219,7 +188,7 @@ def generate_center_blur_video(
                 font_path=font_p,
                 output_path=ass_path,
             )
-            # Usa _burn_subtitles_local (path-safe para Windows)
+
             _burn_subtitles_local(
                 video_in=composed,
                 ass_path=ass_path,

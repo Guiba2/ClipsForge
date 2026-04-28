@@ -1,8 +1,8 @@
 # ✂️ ClipForge — Gerador Local de Clipes Virais
 
-![imagem_inicial](other/inicio.png)
-
 Alternativa self-hosted ao Opus Clip. Analisa vídeos com IA, detecta os melhores trechos e exporta clipes verticais 9:16 prontos para Shorts, Reels e TikTok.
+
+![imagem_inicial](other/inicio.png)
 
 ---
 
@@ -180,6 +180,11 @@ CENTER_VIDEO_HEIGHT_RATIO=0.70
 BACKGROUND_BLUR_STRENGTH=20
 
 ```
+### Atenção
+
+As configurações de Viral Edit e Center Blur podem ser editadas na hora de criar o Clip
+
+![Imagem_de_exemplo_da_configuração](other/config.png)
 
 ---
 
