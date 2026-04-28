@@ -453,23 +453,16 @@ def _stack_panels(top: str, bottom: str, audio_src: str, duration: float, out: s
         "empilhar painéis",
     )
 
-def _escape_ffmpeg_path(path: str) -> str:
-    # FFmpeg filtergraph precisa de / e o drive letter com \:
-    p = Path(path).as_posix()
-    p = p.replace(":", r"\:")
-    return p
 
 def _burn_subtitles(video_in: str, ass_path: str, font_path: str, video_out: str) -> None:
     """
     Queima as legendas ASS no vídeo via filtro subtitles do FFmpeg.
     """
-    ass_file = _escape_ffmpeg_path(ass_path)
-
+    # O filtro subtitles aceita force_style para sobrescrever fonte se necessário
     if font_path and Path(font_path).exists():
-        fonts_dir = _escape_ffmpeg_path(str(Path(font_path).parent))
-        sub_filter = f"subtitles=filename='{ass_file}':fontsdir='{fonts_dir}'"
+        sub_filter = f"subtitles='{ass_path}':fontsdir='{Path(font_path).parent}'"
     else:
-        sub_filter = f"subtitles=filename='{ass_file}'"
+        sub_filter = f"subtitles='{ass_path}'"
 
     _run(
         [
@@ -482,6 +475,7 @@ def _burn_subtitles(video_in: str, ass_path: str, font_path: str, video_out: str
         ],
         "queimar legendas",
     )
+
 
 # ─── Interface pública ────────────────────────────────────────────────────────
 

@@ -18,6 +18,8 @@ clipforge/
 │   ├── config.py            ← Carrega variáveis do .env
 │   ├── models.py            ← Modelos Pydantic
 │   ├── transcription.py     ← Camada unificada de transcrição
+│   ├── center_blur.py     ← Opção para o modo de blur
+│   ├── viral_edit.py     ← Opção para o modo de "Video Viral"
 │   ├── analysis.py          ← Camada unificada de análise com IA
 │   ├── video_processor.py   ← Operações FFmpeg + yt-dlp
 │   ├── requirements.txt
@@ -146,6 +148,37 @@ MIN_CLIP_SECONDS=15
 MAX_CLIP_SECONDS=60
 OUTPUT_FORMAT=mp4
 OUTPUT_ASPECT_RATIO=9:16
+
+# ─── Viral Edit ────────────────────────────────────────────────────────────────
+ENABLE_VIRAL_EDIT=false # Ativar modo viral automaticamente (pode ser sobrescrito por clipe)
+
+FACE_DETECTION=true # Usar OpenCV para detectar rosto e centralizar no painel superior
+
+
+ADD_CAPTIONS=true # Queimar legendas estilo TikTok no vídeo
+
+# Estilo das legendas: tiktok (branco+borda) | bold (amarelo uppercase)
+
+CAPTION_STYLE=tiktok
+
+# Caminho para um vídeo de gameplay/fundo (painel inferior)
+# Se vazio, usa loop do próprio vídeo com blur
+BACKGROUND_VIDEO_PATH=
+
+# Caminho para uma fonte TTF personalizada
+# Se vazio, usa Arial do sistema
+FONT_PATH=
+
+# ─── Center Blur Layout ────────────────────────────────────────────────────────
+# Ativar por padrão (pode ser sobrescrito por clipe via frontend)
+ENABLE_CENTER_BLUR_LAYOUT=false
+
+# Proporção da altura ocupada pelo vídeo central (0.40 a 0.90)
+CENTER_VIDEO_HEIGHT_RATIO=0.70
+
+# Intensidade do desfoque no fundo (sigma do gblur, 5–60)
+BACKGROUND_BLUR_STRENGTH=20
+
 ```
 
 ---
