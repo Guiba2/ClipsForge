@@ -1,3 +1,23 @@
+"""
+center_blur.py — Layout "vídeo central com fundo desfocado".
+
+Composição final (9:16 / 1080×1920):
+  ┌──────────────────┐
+  │  fundo blur top  │  ← mesmo vídeo, cover + gblur forte
+  ├ ·  ·  ·  ·  ·  ·┤  ← fade cosseno (transição imperceptível)
+  │                  │
+  │  vídeo principal │  ← nítido, altura controlada por CENTER_VIDEO_HEIGHT_RATIO
+  │    (nítido)      │
+  │                  │
+  ├ ·  ·  ·  ·  ·  ·┤  ← fade cosseno
+  │ fundo blur bot.  │
+  └──────────────────┘
+
+FG usa force_original_aspect_ratio=increase para funcionar tanto com
+vídeos landscape QUANTO com clipes já em 9:16 (saída do pipeline).
+Paths compatíveis com Windows via _escape_path().
+"""
+
 import logging
 import platform
 import shutil
@@ -11,8 +31,8 @@ import config
 
 logger = logging.getLogger(__name__)
 
-CW, CH = 1080, 1920
-VIGN = 90
+CW, CH = 1080, 1920   # canvas 9:16
+VIGN = 90              # fade cosseno top/bottom — transição suave
 IS_WIN = platform.system() == "Windows"
 
 
@@ -30,15 +50,63 @@ def _escape_path(path: str) -> str:
     return p
 
 
-def _even(n: int) -> int:
-    return max(2, (n // 2) * 2)
+def _probe_fg_height(input_video: str, fg_zoom: float = 1.0, height_ratio: float = 1.0) -> tuple[int, int]:
+    """
+    Define o tamanho da área central do vídeo.
+
+    Regra:
+    - CENTER_VIDEO_HEIGHT_RATIO define a altura do bloco central.
+    - a largura do bloco central fica presa ao canvas (CW), para evitar
+      ultrapassar a tela em vídeos 16:9 ou 9:16.
+    """
+    r = subprocess.run(
+        [
+            "ffprobe", "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=width,height",
+            "-of", "csv=p=0",
+            input_video,
+        ],
+        capture_output=True, text=True,
+    )
+
+    if r.returncode != 0 or not r.stdout.strip():
+        logger.warning("[blur] ffprobe falhou, usando fallback 16:9")
+        vw, vh = 1920, 1080
+    else:
+        vw, vh = map(int, r.stdout.strip().split(","))
+
+    # altura fixa do bloco central
+    fg_h = int(CH * height_ratio)
+
+    # garante par (ffmpeg costuma exigir isso em vários cenários)
+    fg_h = max(2, (fg_h // 2) * 2)
+
+    # largura do bloco central fica presa no canvas
+    fg_w = CW
+
+    logger.info(
+        f"[blur] FG FIXO: {fg_w}x{fg_h} "
+        f"({height_ratio:.0%} da altura, src={vw}x{vh}, zoom={fg_zoom:.2f})"
+    )
+
+    return fg_w, fg_h
 
 
-def _build_filter(fg_h: int, blur_sigma: int, vign: int, fg_zoom: float = 1.0) -> str:
+def _build_filter(fg_w: int, fg_h: int, blur_sigma: int, vign: int, fg_zoom: float = 1.0) -> str:
     """
-    O foreground fica com altura fixa baseada no ratio.
-    O zoom aumenta o vídeo, mas a altura final continua controlada pelo fg_h.
+    Layout de Shorts 9:16:
+      ┌─────────────────┐
+      │   fundo blur    │
+      ├─────────────────┤
+      │ vídeo principal │  ← centralizado e com altura fixa
+      ├─────────────────┤
+      │   fundo blur    │
+      └─────────────────┘
+
+    fg_w e fg_h são calculados por _probe_fg_height().
     """
+    # ── BACKGROUND ──────────────────────────────────────────────────────────
     bg = (
         f"[0:v]"
         f"scale={CW}:{CH}:force_original_aspect_ratio=increase,"
@@ -49,29 +117,24 @@ def _build_filter(fg_h: int, blur_sigma: int, vign: int, fg_zoom: float = 1.0) -
         f"[bpass2]eq=brightness=-0.18:saturation=0.60[bg]"
     )
 
-    # Foreground:
-    # - fg_h define a altura final visível do vídeo no canvas
-    # - scale=-2:fg_h preserva aspecto original
-    # - se fg_zoom > 1.0, ampliamos antes e depois recortamos de volta para fg_h
-    if fg_zoom > 1.0:
-        zoom_h = _even(int(fg_h * fg_zoom))
-        fg_prep = (
-            f"[0:v]"
-            f"scale=-2:{zoom_h},"
-            f"crop=iw:{fg_h}:0:(ih-{fg_h})/2,"
-            f"setsar=1,"
-            f"format=yuva420p"
-            f"[fg_raw]"
-        )
-    else:
-        fg_prep = (
-            f"[0:v]"
-            f"scale=-2:{fg_h}:force_original_aspect_ratio=decrease,"
-            f"setsar=1,"
-            f"format=yuva420p"
-            f"[fg_raw]"
-        )
+    # ── FOREGROUND ──────────────────────────────────────────────────────────
+    # A ideia aqui é:
+    # - fazer o vídeo cobrir a área central inteira (CW x fg_h)
+    # - se fg_zoom > 1.0, ampliar ainda mais antes do crop central
+    zoom_h = max(fg_h, int(fg_h * max(1.0, fg_zoom)))
+    zoom_h = (zoom_h // 2) * 2
 
+    fg_prep = (
+        f"[0:v]"
+        f"scale={CW}:{zoom_h}:force_original_aspect_ratio=increase,"
+        f"crop={CW}:{fg_h}:(iw-{CW})/2:(ih-{fg_h})/2,"
+        f"setsar=1,"
+        f"format=yuva420p"
+        f"[fg_raw]"
+    )
+
+    # ── FADE COSSENO ────────────────────────────────────────────────────────
+    # geq não suporta 'ih' do jeito que a gente precisa aqui, então usamos fg_h já calculado.
     fade_expr = (
         f"if(lt(Y\\,{vign})\\,"
         f"(1-cos(PI*Y/{vign}))/2\\,"
@@ -90,7 +153,10 @@ def _build_filter(fg_h: int, blur_sigma: int, vign: int, fg_zoom: float = 1.0) -
         f"[fg_a]"
     )
 
+    # Descarta bg2 (split auxiliar)
     discard = f"[bg2]nullsink"
+
+    # Overlay: centralizado horizontal e verticalmente
     comp = f"[bg][fg_a]overlay=(W-w)/2:(H-h)/2,setsar=1[out]"
 
     return ";".join([bg, fg_prep, fg_alpha, discard, comp])
@@ -131,24 +197,29 @@ def generate_center_blur_video(
     clip_start: float,
     clip_end: float,
 ) -> str:
+    # blur_sigma >= 20 garante fundo realmente desfocado (dois passes no filtro)
     blur_sigma = max(20, min(100, options.blur_strength))
+
+    # zoom adicional opcional
     fg_zoom = float(getattr(options, "video_zoom", 1.0))
 
-    # Agora o ratio controla diretamente a altura visível do vídeo.
+    # controla o "tamanho" do vídeo principal na tela
     height_ratio = float(getattr(config, "CENTER_VIDEO_HEIGHT_RATIO", 0.6))
-    height_ratio = max(0.2, min(1.0, height_ratio))
+    height_ratio = max(0.2, min(1.0, height_ratio))  # intervalo seguro
 
-    fg_h = _even(int(CH * height_ratio))
+    # calcula o bloco central
+    fg_w, fg_h = _probe_fg_height(input_video, fg_zoom, height_ratio)
 
     style = options.caption_style.value if options.caption_style else "tiktok"
     font_p = config.FONT_PATH or ""
 
     logger.info(
-        f"[blur] center_blur: fg_h={fg_h}px ratio={height_ratio:.0%} "
+        f"[blur] center_blur: fg={fg_w}×{fg_h}px ratio={height_ratio:.0%} "
         f"zoom={fg_zoom:.2f} blur=σ{blur_sigma} captions={options.add_captions} win={IS_WIN}"
     )
 
-    filt = _build_filter(fg_h, blur_sigma, VIGN, fg_zoom=fg_zoom)
+    filt = _build_filter(fg_w, fg_h, blur_sigma, VIGN, fg_zoom=fg_zoom)
+
     duration = clip_end - clip_start
 
     with tempfile.TemporaryDirectory(prefix="clipforge_blur_") as tmp:
