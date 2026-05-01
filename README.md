@@ -99,6 +99,8 @@ pip install -r requirements.txt
 
 > ⚠️ `faster-whisper` baixa o modelo na primeira execução. O modelo `base` (~150MB) é baixado automaticamente.
 
+> A criação do venv pode ser opicional
+
 ### 3. Frontend
 
 ```bash
@@ -214,6 +216,10 @@ Sem configuração extra. O modelo é baixado automaticamente.
 1. Crie conta em: https://openrouter.ai
 2. Configure: `OPENROUTER_API_KEY=sua_chave` e `OPENROUTER_MODEL=`
 
+> O utilizamento do AssemblyAI está com alguns problemas de instabilidade a forma mais viavel seria no Whisper(Entretanto pode se utilizar o AssemblyAI)
+
+> serve tambem a o OpenRouter(O Ollama tambem permite rodar modelos cloud é só pesquisa sobre o modelo que queria utilizar e ver se tem disponibilidade e colocar no OLLAMA_MODEL=)
+
 ---
 
 ## 🌊 Fluxo de Funcionamento
@@ -233,6 +239,8 @@ Usuário → Upload/URL
            ↓
      Download pelo usuário
 ```
+
+> Os resultados podem ser demorados
 
 ---
 
@@ -303,3 +311,5 @@ curl http://localhost:8000/api/clips/abc123
 # 5. Baixar clipe
 curl -O http://localhost:8000/api/download/abc123/clip_01_Titulo.mp4
 ```
+
+---

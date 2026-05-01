@@ -298,7 +298,7 @@ def process_clips(
                 b_name   = f"blur_{i:02d}_{safe_title}_{clip_id}.{config.OUTPUT_FORMAT}"
                 b_output = str(output_job_dir / b_name)
                 generate_center_blur_video(
-                    input_video=output_path,
+                    input_video=video_path,   # ← vídeo ORIGINAL (landscape), não o clipe já convertido
                     output_video=b_output,
                     options=center_blur_options,
                     segments=segments or [],
