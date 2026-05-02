@@ -31,6 +31,7 @@ Requirements for each clip:
 - Must have a strong hook or engaging moment
 - Should be self-contained and understandable without context
 - Prioritize: emotional moments, surprising facts, actionable tips, strong opinions, humor, or storytelling peaks
+- Prefer clips that feel like a complete mini-story: setup -> escalation -> payoff
 
 Total video duration: {_fmt_time(total_duration)}
 

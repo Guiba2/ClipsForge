@@ -7,18 +7,17 @@ assignees: ''
 
 ---
 
-**Describe the bug**
+**Descreva seu problema**
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+**Como reproduzir**
+Fale as etapas que você fez:
 
-**Desktop (please complete the following information):**
+
+**Comportamento esperado**
+Uma descrição clara e concisa do que você esperava que acontecesse.
+
+
+**Desktop (preencha as seguintes informações):**
  - OS: [e.g. iOS]
  - Browser [e.g. chrome, safari]

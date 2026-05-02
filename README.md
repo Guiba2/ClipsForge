@@ -188,6 +188,8 @@ As configurações de Viral Edit e Center Blur podem ser editadas na hora de cri
 
 ![Imagem_de_exemplo_da_configuração](other/config.png)
 
+> Se quiser alterar o fade que fica na transição dos videos no center_blur procure pela variavel VIGN
+
 ---
 
 ## 🔌 Configuração por Provedor
@@ -313,3 +315,7 @@ curl -O http://localhost:8000/api/download/abc123/clip_01_Titulo.mp4
 ```
 
 ---
+
+## Resultado Final
+
+![Imagem_do_clips_gerados](other/final.png)
