@@ -44,20 +44,21 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
     serverConfig?.viral_caption_style || "tiktok"
   );
   const [gameplayFile, setGameplayFile]     = useState(null);
-  const [gameplayPath, setGameplayPath]     = useState(null); // path no servidor após upload
+  const [gameplayPath, setGameplayPath]     = useState(null);
   const [gameplayLoading, setGameplayLoading] = useState(false);
 
   // Center Blur state
-  const [blurEnabled, setBlurEnabled]       = useState(
+  const [blurEnabled, setBlurEnabled]         = useState(
     serverConfig?.center_blur_enabled ?? false
   );
-  const [blurRatio, setBlurRatio]           = useState(
+  const [blurRatio, setBlurRatio]             = useState(
     serverConfig?.center_blur_ratio ?? 0.70
   );
-  const [blurStrength, setBlurStrength]     = useState(
+  const [blurStrength, setBlurStrength]       = useState(
     serverConfig?.center_blur_strength ?? 20
   );
-  const [blurCaptions, setBlurCaptions]     = useState(true);
+  const [blurVign, setBlurVign]               = useState(90);   // fade cosseno (px)
+  const [blurCaptions, setBlurCaptions]       = useState(true);
   const [blurCaptionStyle, setBlurCaptionStyle] = useState("tiktok");
 
   const [loading, setLoading] = useState(false);
@@ -65,7 +66,19 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
   const fileRef     = useRef(null);
   const gameplayRef = useRef(null);
 
-  // ── Handlers ────────────────────────────────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  // Converte valor numérico de VIGN em label descritivo
+  const vignLabel = (v) => {
+    if (v === 0)   return "Sem fade (borda rígida)";
+    if (v <= 30)   return "Sutil";
+    if (v <= 70)   return "Suave";
+    if (v <= 120)  return "Médio";
+    if (v <= 200)  return "Intenso";
+    return "Muito intenso";
+  };
+
+  // ── Handlers ─────────────────────────────────────────────────────────────────
 
   const handleFile = (f) => {
     if (!f) return;
@@ -89,9 +102,6 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
     if (!f) return;
     setGameplayFile(f);
     setGameplayPath(null);
-    // Faz upload imediato do gameplay para obter o path do servidor
-    // (precisamos do job_id, então guardamos o File e fazemos upload depois)
-    // O upload real acontece em handleSubmit após criar o job
   };
 
   const formatSize = (b) =>
@@ -117,7 +127,7 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
         jobId = (await res.json()).job_id;
       }
 
-      // ── Passo 2: upload gameplay (se viral + arquivo de gameplay) ──────────
+      // ── Passo 2: upload gameplay ───────────────────────────────────────────
       let bgPath = null;
       if (viralEnabled && gameplayFile && tab === "file" && jobId) {
         setGameplayLoading(true);
@@ -125,9 +135,7 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
           const gf = new FormData();
           gf.append("file", gameplayFile);
           const gr = await fetch(`/api/gameplay/${jobId}`, { method: "POST", body: gf });
-          if (gr.ok) {
-            bgPath = (await gr.json()).gameplay_path;
-          }
+          if (gr.ok) bgPath = (await gr.json()).gameplay_path;
         } catch (e) {
           console.warn("Erro no upload do gameplay:", e);
         } finally {
@@ -144,11 +152,12 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
         background_video_path: bgPath,
       } : null;
 
-      // ── Passo 3b: montar center_blur options ─────────────────────────────────
+      // ── Passo 3b: montar center_blur options ───────────────────────────────
       const center_blur = blurEnabled ? {
         enabled: true,
         video_height_ratio: blurRatio,
         blur_strength: blurStrength,
+        vign_strength: blurVign,          // ← novo campo
         add_captions: blurCaptions,
         caption_style: blurCaptionStyle,
       } : null;
@@ -166,9 +175,7 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
           }),
         });
         if (!r2.ok) throw new Error((await r2.json().catch(() => ({}))).detail || "Erro ao iniciar análise.");
-
       } else {
-        // URL: pipeline encadeado automaticamente
         const r = await fetch("/api/upload-url", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -193,7 +200,6 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
   };
 
   const canSubmit = !loading && (tab === "file" ? !!file : !!url.trim());
-  const anyEffect  = viralEnabled || blurEnabled;
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -281,7 +287,6 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
               Layout dual-panel, detecção de rosto e legendas estilo TikTok automáticas.
             </p>
           </div>
-          {/* Toggle switch */}
           <button
             className={`toggle-switch${viralEnabled ? " toggle-switch--on" : ""}`}
             onClick={() => setViralEnabled(v => !v)}
@@ -294,7 +299,6 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
         {viralEnabled && (
           <div className="viral-options">
             <div className="viral-options-grid">
-              {/* Caption style */}
               <div className="provider-group">
                 <label>Estilo de Legenda</label>
                 <select className="provider-select" value={captionStyle}
@@ -302,8 +306,6 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
                   {CAPTION_STYLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
-
-              {/* Checkboxes */}
               <div className="viral-checks">
                 <label className="viral-check">
                   <input type="checkbox" checked={faceDetection}
@@ -318,7 +320,6 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
               </div>
             </div>
 
-            {/* Gameplay upload (só para arquivo, não para URL pois não temos job_id ainda) */}
             <div className="gameplay-section">
               <div className="gameplay-label">
                 🎮 Vídeo de fundo (gameplay)
@@ -335,10 +336,7 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
                   <button className="reset-btn" onClick={() => { setGameplayFile(null); setGameplayPath(null); }}>✕</button>
                 </div>
               ) : (
-                <div
-                  className="drop-zone drop-zone--sm"
-                  onClick={() => gameplayRef.current?.click()}
-                >
+                <div className="drop-zone drop-zone--sm" onClick={() => gameplayRef.current?.click()}>
                   <span style={{ fontSize: "1.4rem" }}>🎮</span>
                   <p style={{ fontSize: "0.82rem" }}><strong>Adicionar gameplay</strong></p>
                   <input ref={gameplayRef} type="file" accept="video/*"
@@ -350,7 +348,6 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
           </div>
         )}
       </div>
-
 
       {/* ── Center Blur Layout ── */}
       <div className={`card blur-card${blurEnabled ? " blur-card--active" : ""}`} style={{ animationDelay: "0.25s" }}>
@@ -377,6 +374,7 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
         {blurEnabled && (
           <div className="viral-options">
             <div className="viral-options-grid">
+
               {/* Altura do vídeo central */}
               <div className="provider-group">
                 <label>Altura do vídeo central — {Math.round(blurRatio * 100)}%</label>
@@ -397,6 +395,38 @@ export default function UploadForm({ onJobCreated, serverConfig }) {
                   onChange={(e) => setBlurStrength(parseInt(e.target.value))}
                   className="blur-slider"
                 />
+              </div>
+
+              {/* Fade entre vídeo e fundo (VIGN) */}
+              <div className="provider-group">
+                <label>
+                  Fade da transição — {vignLabel(blurVign)}
+                  <span style={{
+                    marginLeft: 8,
+                    fontSize: "0.72rem",
+                    color: "var(--muted2)",
+                    fontWeight: 400,
+                  }}>
+                    ({blurVign}px)
+                  </span>
+                </label>
+                <input
+                  type="range" min="0" max="300" step="10"
+                  value={blurVign}
+                  onChange={(e) => setBlurVign(parseInt(e.target.value))}
+                  className="blur-slider"
+                />
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: "0.68rem",
+                  color: "var(--muted2)",
+                  marginTop: 4,
+                }}>
+                  <span>Rígido</span>
+                  <span>Suave</span>
+                  <span>Muito suave</span>
+                </div>
               </div>
 
               {/* Caption style */}

@@ -22,40 +22,61 @@ def _build_prompt(segments: List[TranscriptSegment]) -> str:
 
     total_duration = segments[-1].end if segments else 0
 
-    return f"""You are an expert viral content editor for short-form video (YouTube Shorts, Instagram Reels, TikTok).
+    return f"""You are a viral content strategist specialized in short-form video (YouTube Shorts, Instagram Reels, TikTok). Your job is to identify the moments that make viewers stop scrolling, watch until the end, and share.
 
-Analyze the transcript below and identify the {config.MAX_CLIPS} best segments for short-form clips.
+## TASK
+Analyze the transcript below and extract the {config.MAX_CLIPS} highest-potential clips for short-form content.
 
-Requirements for each clip:
-- Duration: between {config.MIN_CLIP_SECONDS} and {config.MAX_CLIP_SECONDS} seconds
-- Must have a strong hook or engaging moment
-- Should be self-contained and understandable without context
-- Prioritize: emotional moments, surprising facts, actionable tips, strong opinions, humor, or storytelling peaks
-- Prefer clips that feel like a complete mini-story: setup -> escalation -> payoff
+## WHAT MAKES A CLIP GO VIRAL
+Prioritize segments that contain ONE OR MORE of these triggers:
+- **Pattern interrupt**: Something unexpected, counterintuitive, or shocking
+- **Emotional peak**: Laughter, awe, anger, inspiration, relatability
+- **Information gap**: A question is raised that demands an answer ("The reason most people fail at X is...")
+- **Proof moment**: A concrete result, transformation, or demonstration
+- **Strong opinion**: A bold or polarizing take that sparks reaction
+- **Narrative payoff**: A setup that delivers a satisfying or surprising conclusion
+- **Quotable line**: A sentence so good people screenshot it
 
-Total video duration: {_fmt_time(total_duration)}
+## CLIP STRUCTURE (ideal)
+Every clip should follow: **Hook (0-3s) → Build (middle) → Payoff (final 3s)**
+- The first 3 seconds MUST be able to stand alone as a hook — if someone sees only that, they should feel compelled to keep watching
+- The last 3 seconds should leave the viewer satisfied OR wanting more
 
-TRANSCRIPT:
+## TECHNICAL REQUIREMENTS
+- Duration: {config.MIN_CLIP_SECONDS}s – {config.MAX_CLIP_SECONDS}s per clip
+- Non-overlapping segments
+- Clips must be self-contained (no "as I mentioned before", no incomplete thoughts)
+- Total video duration: {_fmt_time(total_duration)}
+
+## SCORING GUIDE (confidence)
+- 0.90–1.0 → Extremely strong hook + clear payoff + high shareability
+- 0.75–0.89 → Good hook, solid content, minor weaknesses
+- 0.60–0.74 → Decent moment but missing one key viral element
+- Below 0.60 → Do not include
+
+## TRANSCRIPT
 {transcript_text}
 
-Return ONLY a valid JSON array. No markdown, no explanation, just the array:
+## OUTPUT
+Return ONLY a valid JSON array. No markdown, no explanation, no code fences — just the raw array.
+Order by confidence descending. Return exactly {config.MAX_CLIPS} clips.
+
 [
   {{
     "start_time": 12.5,
     "end_time": 45.0,
-    "title": "Short descriptive title",
-    "reason": "Why this segment works as a viral clip",
+    "title": "Punchy, curiosity-driven title (max 8 words)",
+    "hook": "The exact first sentence of this clip",
+    "reason": "Specific reason this works: which viral trigger it hits and why the hook lands",
     "confidence": 0.92
   }}
 ]
 
-Rules:
-- start_time and end_time must be numbers (seconds)
-- confidence is a float between 0.0 and 1.0
-- Ensure end_time - start_time is between {config.MIN_CLIP_SECONDS} and {config.MAX_CLIP_SECONDS}
-- Return exactly {config.MAX_CLIPS} clips, ordered by confidence descending
-- Clips must be non-overlapping
-- Avoid clips that are too close in time unless the transcript has no other strong moments"""
+Constraints:
+- start_time and end_time are floats (seconds)
+- end_time - start_time must be between {config.MIN_CLIP_SECONDS} and {config.MAX_CLIP_SECONDS}
+- Clips must not overlap
+- No clip should start within 5 seconds of another clip's end, unless the transcript has fewer strong moments than {config.MAX_CLIPS}"""
 
 
 def _fmt_time(seconds: float) -> str:

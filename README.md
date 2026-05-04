@@ -319,3 +319,9 @@ curl -O http://localhost:8000/api/download/abc123/clip_01_Titulo.mp4
 ## Resultado Final
 
 ![Imagem_do_clips_gerados](other/final.png)
+
+---
+
+## Licença
+
+[Licença GNU-GPLv3](LiCENSE)

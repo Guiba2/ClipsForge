@@ -32,7 +32,7 @@ import config
 logger = logging.getLogger(__name__)
 
 CW, CH = 1080, 1920   # canvas 9:16
-VIGN = 90              # fade cosseno top/bottom — transição suave
+VIGN_Default = 90              # fade cosseno top/bottom — transição suave
 IS_WIN = platform.system() == "Windows"
 
 
@@ -204,9 +204,13 @@ def generate_center_blur_video(
     fg_zoom = float(getattr(options, "video_zoom", 1.0))
 
     # controla o "tamanho" do vídeo principal na tela
-    height_ratio = float(getattr(config, "CENTER_VIDEO_HEIGHT_RATIO", 0.6))
+    height_ratio = float(getattr(options, "video_height_ratio", 0.6))
     height_ratio = max(0.2, min(1.0, height_ratio))  # intervalo seguro
 
+    #controla o tamanho do fade
+    vign = int(getattr(options, "vign_strength", VIGN_Default))
+    vign = max(0, min(vign, 300))
+               
     # calcula o bloco central
     fg_w, fg_h = _probe_fg_height(input_video, fg_zoom, height_ratio)
 
@@ -218,7 +222,7 @@ def generate_center_blur_video(
         f"zoom={fg_zoom:.2f} blur=σ{blur_sigma} captions={options.add_captions} win={IS_WIN}"
     )
 
-    filt = _build_filter(fg_w, fg_h, blur_sigma, VIGN, fg_zoom=fg_zoom)
+    filt = _build_filter(fg_w, fg_h, blur_sigma, vign, fg_zoom=fg_zoom)
 
     duration = clip_end - clip_start
 

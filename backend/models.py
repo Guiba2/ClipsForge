@@ -35,6 +35,7 @@ class CenterBlurOptions(BaseModel):
     enabled: bool               = False
     video_height_ratio: float   = 0.70   # 0.0–1.0, porção da altura ocupada pelo vídeo central
     blur_strength: int          = 20     # sigma do gblur no fundo
+    vign_strength: int          = 90     # tamanho do fade cosseno entre vídeo central e fundo (px)
     add_captions: bool          = True
     caption_style: CaptionStyle = CaptionStyle.tiktok
 
